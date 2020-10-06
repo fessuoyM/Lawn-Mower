@@ -3,6 +3,13 @@ This is a Personal Project I am taking on to help in learning about machine lear
 TODO list:
 -Coding:
   -Create a CNN library
+    -Reorganize conv function by dimension
+    -Create function that decides which dimension is appropriate and calls it
+    -Create relu for output
+    -Create pooling
+    -Create fully connect layers
+    -Create SGD function for training
+    -Possibly create genetic algorithm for learning
   -Create a website for control and status updates
     -Allow for scheduling
     -Detect rain and adjust schedule accordingly

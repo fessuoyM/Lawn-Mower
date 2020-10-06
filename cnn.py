@@ -1,91 +1,90 @@
 import numpy as np
+
 class CNN:
     X=0;
     def __init__(self):
         print("A new CNN class was created!")
 
     @classmethod
-    def conv(cls, x, y):
-        #One dimesional Convolution
-        if x.ndim==1 and y.ndim==1:
-            #Prepping ans variable, ensuring h is the flipped version of the smaller array
-            ans = np.zeros(x.size+y.size-1).astype(np.double)
-            if x.size>y.size: temp = x; x=y; x=temp
-            h=np.flip(x)
+    def conv1d(cls, h, y, pad=None, padVal=0):
+        #One Dimensional Convolution
+        #Pad is a padding to apply to either side of the signal of value padVal
+        #Note that when an argument is passed in for pad, a "truncated" convolution will occur in which only fully overlapped regions are convolved. This feature is more usefull in the conv2d, but available here as well.
 
-            #Calculating convolution in 3 steps, overlapping, overlapped, and unoverlapping
-            for i in range(h.size-1): #Overlapping
-                ans[i]=np.multiply(h[h.size-i-1:],y[:i+1]).sum()
-            ans[h.size-1:y.size] = cls.convTrunc(x,y) #Overlapped
-            for i in reversed(range(h.size-1)): #UnOverlapping
-                ans[h.size-1-i+y.size-1] = np.multiply(h[0:i+1],y[y.size-1-i:]).sum()
-            return ans
+        #Initallize paramaters and set up return variable ans
+        if h.shape[0]>y.shape[0]: temp = h; h=y; h=temp
+        if pad is None:
+            pad = h.shape[0]-1
+        ans = np.empty((y.shape[0]-h.shape[0]+2*pad+1), h.dtype)
 
-        #Two Dimensional Array
-        elif x.ndim==2 and y.ndim==2:
-            #Checks that one matrix is smaller in both dimesions and swaps if neccessary
-            #Calls convTrunc method with extra paddings of zero to take care of regions
-            #where full overlap does not occur
-            if x.shape[0]>y.shape[0] and x.shape[1]>y.shape[1]: #Swap to ensure h is smaller
-                return cls.convTrunc(y,x,y.shape[0]-1, 0, y.shape[1]-1)
-            elif x.shape[0]<=y.shape[0] and x.shape[1]<=y.shape[1]:
-                return cls.convTrunc(x,y,x.shape[0]-1, 0, x.shape[1]-1)
-            else:
-                raise IndexError("One array must be smaller in size in all dimensions")
-
-    @classmethod
-    def convTrunc(cls, h, y, pad=None, padVal=0, pady=None):
-        #One dimensional convolution only considering fully overlapped regions
-        #Optional padding size to give earlier and later points more weights
-        if h.ndim==1 and y.ndim==1:
-            #Flip h and y if h is the larger array
-            if h.size>y.size:
-                temp = h; h=y; y=temp
-            #Add padding if argument was passed in and greater than 0
-            if pad is not None and pad>0:
-                temp = y;
-                y = padVal*np.ones(temp.size+2*pad)
-                y[pad:y.size-pad] = temp
-            #Reverse h for flip and slip and calculate sliding weighted sum
+        #Calculating convolution in 3 steps, overlapping, overlapped, and unoverlapping
+        if padVal == 0:
             h=np.flip(h)
-            ans = np.zeros(y.size-h.size+1).astype(np.double)
-            for i in range(y.size-h.size+1): #Overlapped
-                ans[i] = np.multiply(h,y[i:i+h.size]).sum()
+            for i in range(ans.shape[0]):
+                if i+h.shape[0]<=pad:
+                    ans[i] = 0
+                elif i<pad:
+                    ans[i] = np.multiply(h[-(i-pad+h.shape[0]):],y[0:i-pad+h.shape[0]]).sum()
+                elif i-pad+h.shape[0]<=y.shape[0]:
+                    ans[i] = np.multiply(h,y[i-pad:i-pad+h.shape[0]]).sum()
+                elif i<y.shape[0]+pad:
+                    ans[i] = np.multiply(h[:y.shape[0]-(i-pad)],y[i-pad:]).sum()#h[:y.shape[0]-1-(i-pad)+1]
+                else:
+                    ans[i]=0
             return ans
-
-        #Two dimensional convolution only considering fully overlapped regions
-        #Optional padding size to give earlier and later points more weights
-        elif h.ndim==2 and y.ndim==2:
-            #Ensure h is the smaller array, and in both dimensions; otherwise return error
-            if h.shape[0]>y.shape[0] and h.shape[1]>y.shape[1]:
-                temp = h; h=y; y=temp
-            if h.shape[0]<=y.shape[0] and h.shape[1]<=y.shape[1]:
-                #Add padding if arguments passed in
-                if pad is not None:
-                    if pad<0: raise Warning("Padding cannot be negative, Padding of 0 was used instead");
-                    if pady == None:
-                        pady = pad
-                    else:
-                        if pad<0: raise Warning("Padding cannot be negative, Padding of 0 was used instead");
-                    temp = y
-                    y = padVal*np.ones((y.shape[0]+2*pad, y.shape[1]+2*pady))
-                    y[pad:y.shape[0]-pad,pady:y.shape[1]-pady] = temp
-
-                #Flip matrix for flip and slip across both axis
-                h=np.flipud(h)
-                h=np.fliplr(h)
-                ans = np.zeros((y.shape[0]-h.shape[0]+1, y.shape[1]-h.shape[1]+1)).astype(np.double)
-
-                #Conduct sliding wieghted sum
-                for i in range(y.shape[0]-h.shape[0]+1):
-                    for j in range(y.shape[1]-h.shape[1]+1):
-                        ans[i][j] = np.multiply(h,y[i:i+h.shape[0],j:j+h.shape[1]]).sum()
-                return ans
-            else:
-                raise IndexError("One array must be smaller in size in all dimensions")
+        else:
+            temp = y;
+            y = padVal*np.ones(temp.shape[0]+2*pad)
+            y[pad:y.shape[0]-pad] = temp
+            return cls.conv1d(h,y,0)
 
     @classmethod
-    def normConv(cls, h, y, pad=None, padVal=0, pady=None):
+    def conv2d(cls, h, y, pad=None, pady=None, padVal=0):
+        #Two Dimensional Convolution
+        #Pad is a padding to apply to all sides of the signal of value padVal
+        #Note that when an argument is passed in for pad, a "truncated" convolution will occur, in which only fully overlapped regions are convolved. This can be useful in giving edge pixel more weight in the convolutions
+
+        #Initallize paramaters and set up return variable ans
+        if np.argmin((h.shape[0], y.shape[0]))!=np.argmin((h.shape[1], y.shape[1])):
+            raise IndexError("One array must be smaller in size in all dimensions")
+        if h.shape[0]>y.shape[0]: temp = h; h=y; h=temp
+        if pad is None:
+            pady = h.shape[0]-1
+            pad = h.shape[1]-1
+        if pady is None:
+            pady = pad
+        ans = np.empty((y.shape[0]-h.shape[0]+2*pady+1,y.shape[1]-h.shape[1]+2*pad+1), h.dtype)
+
+        #Calculating convolution in 3 steps, overlapping, overlapped, and unoverlapping
+        if padVal == 0:
+            h=np.flipud(h)
+            for j in range(ans.shape[0]):
+                if j+h.shape[0]<=pady:
+                    ans[j,...] = 0
+                elif j-pady<0:
+                    ans[j,...] = cls.conv1d(h[-1,...],y[j-pady+h.shape[0]-1,...],pad)
+                    for i in range(1,j-pady+h.shape[0]):
+                        ans[j,...] += cls.conv1d(h[-1-i,...],y[j-pady+h.shape[0]-1-i,...],pad)
+                elif j-pady+h.shape[0]<=y.shape[0]:
+                    ans[j,...] = cls.conv1d(h[0,...],y[j-pady,...],pad)
+                    for i in range(1,h.shape[0]):
+                        ans[j,...] += cls.conv1d(h[i,...],y[j-pady+i,...],pad)
+                elif j-pady<y.shape[0]:
+                    ans[j,...] = cls.conv1d(h[0,...],y[j-pady,...],pad)
+                    for i in range(1,y.shape[0]-(j-pady)):
+                        ans[j,...] += cls.conv1d(h[i,...],y[j-pady+i,...],pad)
+                else:
+                    ans[j,...]=0
+        else:
+            temp = y
+            y=padVal*np.ones((y.shape[0]+2*pady,y.shape[1]+2*pad))
+            y[pady:y.shape[0]-pady,pad:y.shape[1]-pad] = temp
+            return cls.conv2d(h,y,0)
+
+        return ans
+
+    @classmethod
+    def normConv(cls, h, y, pad=None, pady=None, padVal=0):
         #Ensure h is the smaller array, and in both dimensions
         if h.ndim==1 and y.ndim==1:
             if h.size>y.size:
@@ -106,40 +105,34 @@ class CNN:
             p = p==False
             h[p] = np.interp(h[p], (h[p].min(), h[p].max()), (-1, 0))
             h[p] = h[p]/np.abs(h[p].sum())
-        return cls.convTrunc(h, y, pad, padVal, pady)
+        if h.ndim==1 and y.ndim==1:
+            return cls.conv1d(h, y, pad, pady, padVal)
+        else:
+            return cls.conv2d(h, y, pad, pady, padVal)
 
     @classmethod
-    def convShape(cls, h, y, pad=None, pady=None, trunc=True):
+    def convShape(cls, h, y, pad=None, pady=None):
         #Function that returns the shape of arrays returned given the above parameters
-        if trunc:
+        if y.ndim==1:
             if pad is None:
-                pad = 0
+                pad = np.min((h.shape[0], y.shape[0]))-1
+            return (y.shape[0]-h.shape[0]+2*pad+1)
+        elif y.ndim==2:
+            if pad is None:
+                pad = np.min((h.shape[1], y.shape[1]))-1
+                pady = np.min((h.shape[0], y.shape[0]))-1
             if pady is None:
-                pady=pad
-            if y.ndim==1:
-                return (y.shape[0]+2*pad-h.shape[0]+1)
-            elif y.ndim==2:
-                if np.argmin((h.shape[0], y.shape[0]))==np.argmin((h.shape[1], y.shape[1])):
-                    if h.shape[0]>y.shape[0]:
-                        temp = y; y=h; h=temp
-                    return (y.shape[0]+2*pad-h.shape[0]+1, y.shape[1]+2*pady-h.shape[1]+1)
-                else:
-                    raise IndexError("One array must be smaller in size in all dimensions")
+                pady = pad
+            if np.argmin((h.shape[0], y.shape[0]))==np.argmin((h.shape[1], y.shape[1])):
+                if h.shape[0]>y.shape[0]:
+                    temp = y; y=h; h=temp
+                return (y.shape[0]-h.shape[0]+2*pady+1,y.shape[1]-h.shape[1]+2*pad+1)
             else:
-                raise IndexError("This class can only handle up to 2 dimensions")
+                raise IndexError("One array must be smaller in size in all dimensions")
         else:
-            if y.ndim==1:
-                return (y.shape[0]+h.shape[0]-1)
-            elif y.ndim==2:
-                if np.argmin((h.shape[0], y.shape[0]))==np.argmin((h.shape[1], y.shape[1])):
-                    return (y.shape[0]+h.shape[0]-1, y.shape[1]+h.shape[1]-1)
-                else:
-                    raise IndexError("One array must be smaller in size in all dimensions")
-            else:
-                raise IndexError("This class can only handle up to 2 dimensions")
+            raise IndexError("This class can only handle up to 2 dimensions")
 
     @classmethod
     def toInt(cls, a, type):
         infob = np.iinfo(type)
-        print((a.min(), a.max()), (infob.min, infob.max))
         return np.interp(a,(a.min(), a.max()), (infob.min, infob.max)).astype(type)

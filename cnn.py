@@ -9,7 +9,7 @@ class CNN:
         #One dimesional Convolution
         if x.ndim==1 and y.ndim==1:
             #Prepping ans variable, ensuring h is the flipped version of the smaller array
-            ans = np.zeros(x.size+y.size-1)
+            ans = np.zeros(x.size+y.size-1).astype(np.double)
             if x.size>y.size: temp = x; x=y; x=temp
             h=np.flip(x)
 
@@ -27,14 +27,11 @@ class CNN:
             #Calls convTrunc method with extra paddings of zero to take care of regions
             #where full overlap does not occur
             if x.shape[0]>y.shape[0] and x.shape[1]>y.shape[1]: #Swap to ensure h is smaller
-                ans = cls.convTrunc(y,x,y.shape[0]-1, 0, y.shape[1]-1)
-                return ans
+                return cls.convTrunc(y,x,y.shape[0]-1, 0, y.shape[1]-1)
             elif x.shape[0]<=y.shape[0] and x.shape[1]<=y.shape[1]:
-                ans = cls.convTrunc(x,y,x.shape[0]-1, 0, x.shape[1]-1)
-                return ans
+                return cls.convTrunc(x,y,x.shape[0]-1, 0, x.shape[1]-1)
             else:
-                raise ValueError("One array must be smaller in size in all dimensions")
-
+                raise IndexError("One array must be smaller in size in all dimensions")
 
     @classmethod
     def convTrunc(cls, h, y, pad=None, padVal=0, pady=None):
@@ -51,7 +48,7 @@ class CNN:
                 y[pad:y.size-pad] = temp
             #Reverse h for flip and slip and calculate sliding weighted sum
             h=np.flip(h)
-            ans = np.zeros(y.size-h.size+1)
+            ans = np.zeros(y.size-h.size+1).astype(np.double)
             for i in range(y.size-h.size+1): #Overlapped
                 ans[i] = np.multiply(h,y[i:i+h.size]).sum()
             return ans
@@ -77,7 +74,7 @@ class CNN:
                 #Flip matrix for flip and slip across both axis
                 h=np.flipud(h)
                 h=np.fliplr(h)
-                ans = np.zeros((y.shape[0]-h.shape[0]+1, y.shape[1]-h.shape[1]+1))
+                ans = np.zeros((y.shape[0]-h.shape[0]+1, y.shape[1]-h.shape[1]+1)).astype(np.double)
 
                 #Conduct sliding wieghted sum
                 for i in range(y.shape[0]-h.shape[0]+1):
@@ -85,8 +82,7 @@ class CNN:
                         ans[i][j] = np.multiply(h,y[i:i+h.shape[0],j:j+h.shape[1]]).sum()
                 return ans
             else:
-                raise ValueError("One array must be smaller in size in all dimensions")
-
+                raise IndexError("One array must be smaller in size in all dimensions")
 
     @classmethod
     def normConv(cls, h, y, pad=None, padVal=0, pady=None):
@@ -111,3 +107,39 @@ class CNN:
             h[p] = np.interp(h[p], (h[p].min(), h[p].max()), (-1, 0))
             h[p] = h[p]/np.abs(h[p].sum())
         return cls.convTrunc(h, y, pad, padVal, pady)
+
+    @classmethod
+    def convShape(cls, h, y, pad=None, pady=None, trunc=True):
+        #Function that returns the shape of arrays returned given the above parameters
+        if trunc:
+            if pad is None:
+                pad = 0
+            if pady is None:
+                pady=pad
+            if y.ndim==1:
+                return (y.shape[0]+2*pad-h.shape[0]+1)
+            elif y.ndim==2:
+                if np.argmin((h.shape[0], y.shape[0]))==np.argmin((h.shape[1], y.shape[1])):
+                    if h.shape[0]>y.shape[0]:
+                        temp = y; y=h; h=temp
+                    return (y.shape[0]+2*pad-h.shape[0]+1, y.shape[1]+2*pady-h.shape[1]+1)
+                else:
+                    raise IndexError("One array must be smaller in size in all dimensions")
+            else:
+                raise IndexError("This class can only handle up to 2 dimensions")
+        else:
+            if y.ndim==1:
+                return (y.shape[0]+h.shape[0]-1)
+            elif y.ndim==2:
+                if np.argmin((h.shape[0], y.shape[0]))==np.argmin((h.shape[1], y.shape[1])):
+                    return (y.shape[0]+h.shape[0]-1, y.shape[1]+h.shape[1]-1)
+                else:
+                    raise IndexError("One array must be smaller in size in all dimensions")
+            else:
+                raise IndexError("This class can only handle up to 2 dimensions")
+
+    @classmethod
+    def toInt(cls, a, type):
+        infob = np.iinfo(type)
+        print((a.min(), a.max()), (infob.min, infob.max))
+        return np.interp(a,(a.min(), a.max()), (infob.min, infob.max)).astype(type)

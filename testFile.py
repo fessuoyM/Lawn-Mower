@@ -1,19 +1,36 @@
 from cnn import CNN
 import numpy as np
+from PIL import Image
 
-a = np.arange(5)+1
-b = np.array([1,2,1,2,3,4,3,4,5])
+im = Image.open("TestImages/TI_0001.jpg")
+print(im.format, im.size, im.mode)
+im.show()
 
-print(a)
-print(b)
-print(CNN.conv(a,b))
-print(CNN.convTrunc(a,b,2))
+imArr = np.array(im)
 
-a = np.array([[1,2,3,4],[4,3,2,1],[2,1,3,4],[4,1,3,2]])
-b = np.array([[1,1,1],[0,0,0],[-1,-1,-1]])
+kernal = np.array([ [ 1.0, 1.0, 1.0, 1.0, 1.0],
+                    [ 0.5, 0.5, 0.5, 0.5, 0.5],
+                    [ 0.0, 0.0, 0.0, 0.0, 0.0],
+                    [-0.5,-0.5,-0.5,-0.5,-0.5],
+                    [-1.0,-1.0,-1.0,-1.0,-1.0]])
+imShape = CNN.convShape(imArr, kernal)
 
-print(a)
-print(b)
-print(CNN.conv(a,b))
-print(CNN.convTrunc(a,b))
-print(CNN.normConv(a,b))
+imArrFil = np.empty((imShape[0],imShape[1],3))
+for i in range(3):
+    imArrFil[...,i] = CNN.normConv(imArr[...,i], kernal)
+
+imFil = Image.fromarray(CNN.toInt(np.abs(imArrFil),imArr.dtype))
+imFil.show()
+imFil.save("TestImages/VImage.jpg")
+
+
+kernal = kernal.T
+imShape = CNN.convShape(imArr, kernal)
+
+imArrFil = np.empty((imShape[0],imShape[1],3))
+for i in range(3):
+    imArrFil[...,i] = CNN.normConv(imArr[...,i], kernal)
+
+imFil = Image.fromarray(CNN.toInt(np.abs(imArrFil),imArr.dtype))
+imFil.show()
+imFil.save("TestImages/HImage.jpg")

@@ -3,7 +3,7 @@ This is a Personal Project I am taking on to help in learning about machine lear
 TODO list:
 -Coding:
   -Create a CNN library
-    -Adapt conv function to be nDim compatible
+    -Optimize conv library for speed
     -Create relu for output
     -Create pooling
     -Create fully connect layers

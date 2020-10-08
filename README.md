@@ -3,8 +3,7 @@ This is a Personal Project I am taking on to help in learning about machine lear
 TODO list:
 -Coding:
   -Create a CNN library
-    -Reorganize conv function by dimension
-    -Create function that decides which dimension is appropriate and calls it
+    -Adapt conv function to be nDim compatible
     -Create relu for output
     -Create pooling
     -Create fully connect layers

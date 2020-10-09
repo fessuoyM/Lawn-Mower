@@ -7,141 +7,126 @@ class NumpyConv:
 
     @classmethod
     def conv(cls, h, y, pad=None, padVal=0):
-        if h.ndim>y.ndim: temp=h; h=y; y=temp
-        if y.ndim==h.ndim:
-            ans = np.zeros(cls.convShape(h,y,pad,padVal),h.dtype)
-            if h.ndim==1:
-                cls.conv1d(ans,h,y,pad,padVal)
-            else:
-                for i in range(h.ndim):
-                    if h.shape[i]>y.shape[i]:
-                        raise IndexError("One array must be smaller in size in all dimensions")
-                cls.conv_ndim(ans, h,y,pad,padVal)
-        elif y.ndim==h.ndim+1:
-            ans = np.zeros(np.append(cls.convShape(h,y[...,0],pad,padVal),y.shape[-1]),h.dtype)
-            if h.ndim==1:
-                for i in range(y.shape[-1]):
-                    cls.conv1d(ans[...,i], h,y[...,i],pad,padVal)
-            elif h.ndim>1:
-                for i in range(y.shape[-1]):
-                    cls.conv_ndim(ans[...,i], h,y[...,i],pad,padVal)
-            else:
-                raise Warning("You must pass in an array with at least 1 dimension")
-                return 0
-        else:
-            raise IndexError("The largest acceptable difference in dimensions is 1")
-        return ans
-
-    @classmethod
-    def conv1d(cls, ans, h, y, pad=None, padVal=0):
-        #One Dimensional Convolution
+        #N-Dimensional convolution
         #Pad is a padding to apply to either side of the signal of value padVal
-        #Note that when an argument is passed in for pad, a "truncated" convolution will occur in which only fully overlapped regions are convolved. This feature is more usefull in the conv2d, but available here as well.
+        #Note that when an argument is passed in for pad, a "truncated" convolution will occur in which only fully overlapped regions are convolved. This feature is more usefull in the convolution of higher dimensions
 
-        #Initallize paramaters and set up return variable
-        if h.shape[0]>y.shape[0]: temp = h; h=y; y=temp
-        if pad is None:
-            pad = h.shape[0]-1
+        #Call Appriopriate function
+        if h.shape[-1]>y.shape[-1]: temp=h; h=y; y=temp
+        if h.ndim>y.ndim:
+            return cls.convManyH(h,y,pad,padVal)
+        elif y.ndim>h.ndim:
+            return cls.convManyY(h,y,pad,padVal)
 
-        #Calculating convolution in 3 steps, overlapping, overlapped, and unoverlapping
-        if pad != 0:
-            temp = y
-            y = padVal*np.ones(temp.shape[0]+2*pad)
-            y[pad:y.shape[0]-pad] = temp
-        h=np.flip(h)
-        ans+=np.tensordot(np.lib.stride_tricks.as_strided(y, shape=(y.shape[0]-h.shape[0]+1,h.shape[0]),strides=(y.strides*2)),h,([1],[0]))
-        return ans
 
-    @classmethod
-    def conv_ndim(cls, ans, h, y, pad=None, padVal=0):
-        #n Dimensional Convolution
-        #Pad is a padding width to apply to all sides of the signal of value padVal
-        #Note that when an argument is passed in for pad, a "truncated" convolution will occur, in which only fully overlapped regions are convolved. This can be useful in giving edge pixel more weight in the convolutions
-
-        #Initallize paramaters and set up return variable ans
-        if h.shape[0]>y.shape[0]: temp = h; h=y; y=temp
+        #Ensure h is the smaller dimensional array
+        if h.shape[0]>y.shape[1]: temp = h; h=y; y=temp
         for i in range(h.ndim):
-            if h.shape[i]>y.shape[i]:
-                raise IndexError("One array must be smaller in size in all dimensions")
+            if h.shape[i]>y.shape[i+1]:
+                raise Warning("If one array is not larger than the other in ALL dimensions, program may need to generate extra paddings and slow things down. It's suggested to use a filter that is smaller in all dimensions")
 
+        ##Apply specified padding, or add default padding of h.shape-1
         if pad is None:
-            pad = np.empty(h.ndim, np.int)
-            for i in range(h.ndim):
-                pad[i]=h.shape[i]-1
+            pad = np.subtract(h.shape,1)
         elif np.isscalar(pad):
             pad = pad*np.ones(h.ndim, np.int)
 
-        #Iteratively calls itself until its down to one dimension
-        if h.ndim>2:
-            #Calculating convolution in 3 steps, overlapping, overlapped, and unoverlapping
-            if padVal == 0:
-                h=np.flip(h,0)
-                if pad[0]-h.shape[0]+1>0:
-                    ans[:pad[0]-h.shape[0]+1,...] = 0
-                if pad[0]-h.shape[0]+1<0:
-                    for j in range(0,pad[0]):
-                        cls.conv_ndim(ans[j,...], h[-1,...],y[j-pad[0]+h.shape[0]-1,...],pad[1:])
-                        for i in range(1,j-pad[0]+h.shape[0]):
-                            cls.conv_ndim(ans[j,...], h[-1-i,...],y[j-pad[0]+h.shape[0]-1-i,...],pad[1:])
-                else:
-                    for j in range(pad[0]-h.shape[0]+1,pad[0]):
-                        cls.conv_ndim(ans[j,...], h[-1,...],y[j-pad[0]+h.shape[0]-1,...],pad[1:])
-                        for i in range(1,j-pad[0]+h.shape[0]):
-                            cls.conv_ndim(ans[j,...], h[-1-i,...],y[j-pad[0]+h.shape[0]-1-i,...],pad[1:])
-                for j in range(pad[0],y.shape[0]-h.shape[0]+pad[0]+1):
-                    cls.conv_ndim(ans[j,...], h[0,...],y[j-pad[0],...],pad[1:])
-                    for i in range(1,h.shape[0]):
-                        cls.conv_ndim(ans[j,...], h[i,...],y[j-pad[0]+i,...],pad[1:])
-                if ans.shape[0]<=y.shape[0]+pad[0]:
-                    for j in range(y.shape[0]-h.shape[0]+pad[0]+1, ans.shape[0]):
-                        cls.conv_ndim(ans[j,...], h[0,...],y[j-pad[0],...],pad[1:])
-                        for i in range(1,y.shape[0]-(j-pad[0])):
-                            cls.conv_ndim(ans[j,...], h[i,...],y[j-pad[0]+i,...],pad[1:])
-                else:
-                    for j in range(y.shape[0]-h.shape[0]+pad[0]+1, y.shape[0]+pad[0]):
-                        cls.conv_ndim(ans[j,...], h[0,...],y[j-pad[0],...],pad[1:])
-                        for i in range(1,y.shape[0]-(j-pad[0])):
-                            cls.conv_ndim(ans[j,...], h[i,...],y[j-pad[0]+i,...],pad[1:])
-                ans[y.shape[0]+pad[0]:,...]=0
+        #Flip filter (h) and pad y with specified padding settings
+        h=np.flip(h)
+        y=np.pad(y,np.append([[0,0]],(np.ones((2,pad.size),np.int)*pad).T,axis=0),'constant', constant_values=padVal)
 
-            else:
-                y=np.pad(y,(np.ones((2,pad.size),np.int)*pad).T,'constant', constant_values=padVal)
-                return cls.conv_ndim(ans, h,y,0)
+        #Generate a window view of y that involves each voxel for convolution
+        a=np.lib.stride_tricks.as_strided(y, shape=(np.append(np.append(y.shape[0],np.subtract(y[0,...].shape, h.shape)+1), h.shape)),strides=(np.append(y.strides[0],y[0,...].strides*2)))
+
+        #Flatten array y along each voxel regardless of dimension so a dot product with a flattened filter results in the summed elementwise multiplication
+        a=np.reshape(np.ravel(a), (np.prod(np.subtract(y.shape, h.shape)+1),np.prod(h.shape)))
+        a=np.tensordot(a,np.ravel(h),([1],[0]))
+
+        #Reshape the answer and return the value
+        return np.reshape(np.ravel(a),np.subtract(np.append(yshap,y.shape[1:]), h.shape)+1)
+
+    @classmethod
+    def convManyY(cls, h, y, pad=None, padVal=0):
+        #N-Dimensional convolution
+        #Pad is a padding to apply to either side of the signal of value padVal
+        #Note that when an argument is passed in for pad, a "truncated" convolution will occur in which only fully overlapped regions are convolved. This feature is more usefull in the convolution of higher dimensions
+
+        #Ensure y is h.ndim+1 dimension
+        if h.ndim>y.ndim: temp=h; h=y; y=temp
+        if h.ndim==y.ndim:
+            y=np.reshape(np.ravel(y),(np.append(1,y.shape)))
+            yshap = (1)
+        elif y.ndim>h.ndim:
+            y=np.reshape(np.ravel(y), np.append(np.prod(y.shape[:-h.ndim]),y.shape[-h.ndim:]))
+            yshap = y.shape[:-h.ndim]
+
+        #Commented out because y cannot be switched after adding/reshaping the
+            #Ensure h is the smaller dimensional array
+            # if h.shape[0]>y.shape[1]: temp = h; h=y; y=temp;
+            # print(h.shape, y.shape)
+            # for i in range(h.ndim):
+            #     if h.shape[i]>y.shape[i+1]:
+            #         raise Warning("If one array is not larger than the other in ALL dimensions, program may need to generate extra paddings and slow things down. It's suggested to use a filter that is smaller in all dimensions")
+
+        ##Apply specified padding, or add default padding of h.shape-1
+        if pad is None:
+            pad = np.subtract(h.shape,1)
+        elif np.isscalar(pad):
+            pad = pad*np.ones(h.ndim, np.int)
+
+        #Flip filter (h) and pad y with specified padding settings
+        h=np.flip(h)
+        y=np.pad(y,np.append([[0,0]],(np.ones((2,pad.size),np.int)*pad).T,axis=0),'constant', constant_values=padVal)
+
+        #Generate a window view of y that involves each voxel for convolution
+        a=np.lib.stride_tricks.as_strided(y, shape=(np.append(np.append(y.shape[0],np.subtract(y[0,...].shape, h.shape)+1), h.shape)),strides=(np.append(y.strides[0],y[0,...].strides*2)))
+
+        #Flatten array y along each voxel regardless of dimension so a dot product with a flattened filter results in the summed elementwise multiplication
+        a=np.reshape(np.ravel(a), (a.shape[0]*np.prod(np.subtract(y[0,...].shape, h.shape)+1),np.prod(h.shape)))
+        a=np.tensordot(a,np.ravel(h),([1],[0]))
+
+        #Reshape the answer and return the value; if yshap is one, remove the outter shell added for the algorithm generalizability
+        if yshap==1:
+            return np.reshape(np.ravel(a),np.append(yshap,np.subtract(y.shape[1:], h.shape)+1))[0,...]
         else:
-            if padVal == 0:
-                h=np.flip(h,0)
-                if pad[0]-h.shape[0]+1>0:
-                    ans[:pad[0]-h.shape[0]+1,...] = 0
-                if pad[0]-h.shape[0]+1<0:
-                    for j in range(0,pad[0]):
-                        cls.conv1d(ans[j,...], h[-1,...],y[j-pad[0]+h.shape[0]-1,...],pad[1])
-                        for i in range(1,j-pad[0]+h.shape[0]):
-                            cls.conv1d(ans[j,...], h[-1-i,...],y[j-pad[0]+h.shape[0]-1-i,...],pad[1])
-                else:
-                    for j in range(pad[0]-h.shape[0]+1,pad[0]):
-                        cls.conv1d(ans[j,...], h[-1,...],y[j-pad[0]+h.shape[0]-1,...],pad[1])
-                        for i in range(1,j-pad[0]+h.shape[0]):
-                            cls.conv1d(ans[j,...], h[-1-i,...],y[j-pad[0]+h.shape[0]-1-i,...],pad[1])
-                for j in range(pad[0],y.shape[0]-h.shape[0]+pad[0]+1):
-                    cls.conv1d(ans[j,...], h[0,...],y[j-pad[0],...],pad[1])
-                    for i in range(1,h.shape[0]):
-                        cls.conv1d(ans[j,...], h[i,...],y[j-pad[0]+i,...],pad[1])
-                if ans.shape[0]<=y.shape[0]+pad[0]:
-                    for j in range(y.shape[0]-h.shape[0]+pad[0]+1, ans.shape[0]):
-                        cls.conv1d(ans[j,...], h[0,...],y[j-pad[0],...],pad[1])
-                        for i in range(1,y.shape[0]-(j-pad[0])):
-                            cls.conv1d(ans[j,...], h[i,...],y[j-pad[0]+i,...],pad[1])
-                else:
-                    for j in range(y.shape[0]-h.shape[0]+pad[0]+1, y.shape[0]+pad[0]):
-                        cls.conv1d(ans[j,...], h[0,...],y[j-pad[0],...],pad[1])
-                        for i in range(1,y.shape[0]-(j-pad[0])):
-                            cls.conv1d(ans[j,...], h[i,...],y[j-pad[0]+i,...],pad[1])
-                ans[y.shape[0]+pad[0]:,...]=0
+            return np.reshape(np.ravel(a),np.append(yshap,np.subtract(y.shape[1:], h.shape)+1))
 
-            else:
-                y=np.pad(y,(np.ones((2,pad.size),np.int)*pad).T,'constant', constant_values=padVal)
-                return cls.conv_ndim(ans, h,y,0)
-        return ans
+    @classmethod
+    def convManyH(cls, h, y, pad=None, padVal=0):
+        #N-Dimensional convolution
+        #Pad is a padding to apply to either side of the signal of value padVal
+        #Note that when an argument is passed in for pad, a "truncated" convolution will occur in which only fully overlapped regions are convolved. This feature is more usefull in the convolution of higher dimensions
+
+        #Ensure y is h.ndim+1 dimension
+        if y.ndim>h.ndim: temp=h; h=y; y=temp
+        if h.ndim==y.ndim:
+            h=np.reshape(np.ravel(h),(np.append(1,h.shape)))
+            hshap = (1)
+        elif h.ndim>y.ndim:
+            h=np.reshape(np.ravel(h), np.append(np.prod(h.shape[:-y.ndim]),h.shape[-y.ndim:]))
+            hshap = h.shape[:-y.ndim]
+
+        ##Apply specified padding, or add default padding of h.shape-1
+        if pad is None:
+            pad = np.subtract(h[0,...].shape,1)
+        elif np.isscalar(pad):
+            pad = pad*np.ones(y.ndim, np.int)
+
+        #Flip filter (h) and pad y with specified padding settings
+        h=np.flip(np.flip(h),0)
+        y=np.pad(y,(np.ones((2,pad.size),np.int)*pad).T,'constant', constant_values=padVal)
+
+        #Generate a window view of y that involves each voxel for convolution
+        a=np.lib.stride_tricks.as_strided(y, shape=(np.append(np.subtract(y.shape, h[0,...].shape)+1, h[0,...].shape)),strides=(y.strides*2))
+
+        #Flatten array y along each voxel regardless of dimension so a dot product with a flattened filter results in the summed elementwise multiplication
+        a=np.reshape(np.ravel(a), (np.prod(np.subtract(y.shape, h[0,...].shape)+1),np.prod(h[0,...].shape)))
+        a=np.tensordot(a,np.reshape(np.ravel(h),(h.shape[0],np.prod(h[0,...].shape))),([1],[1])).T
+        #Reshape the answer and return the value; if yshap is one, remove the outter shell added for the algorithm generalizability
+        if hshap==1:
+            return np.reshape(np.ravel(a),np.append(hshap,np.subtract(y.shape, h.shape[1:])+1))[0,...]
+        else:
+            return np.reshape(np.ravel(a),np.append(hshap,np.subtract(y.shape, h.shape[1:])+1))
 
     @classmethod
     def normConv(cls, h, y, pad=None, pady=None, padVal=0):
@@ -158,26 +143,6 @@ class NumpyConv:
             h[p] = np.interp(h[p], (h[p].min(), h[p].max()), (-1, 0))
             h[p] = h[p]/np.abs(h[p].sum())
         return cls.conv(h, y, pad, pady, padVal)
-
-    @classmethod
-    def convShape(cls, h, y, pad=None, pady=None):
-        #Function that returns the shape of arrays returned given the above parameters
-        if h.ndim==1:
-            if pad is None:
-                pad = np.min((h.shape[0], y.shape[0]))-1
-            return np.array([y.shape[0]-h.shape[0]+2*pad+1])
-        elif h.ndim>1:
-            if h.shape[0]>y.shape[0]: temp = h; h=y; y=temp
-            for i in range(h.ndim):
-                if h.shape[i]>y.shape[i]:
-                    raise IndexError("One array must be smaller in size in all dimensions")
-            if pad is None:
-                pad = np.empty(h.ndim, np.int)
-                for i in range(h.ndim):
-                    pad[i]=h.shape[i]-1
-            elif np.isscalar(pad):
-                pad = pad*np.ones(h.ndim, np.int)
-            return np.subtract(np.add(y.shape,2*pad+1),h.shape)
 
     @classmethod
     def toInt(cls, a, type):
